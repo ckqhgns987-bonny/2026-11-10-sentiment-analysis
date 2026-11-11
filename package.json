@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "build": "echo 'Build complete: Pure vanilla static files and serverless functions'"
   },
   "keywords": [
     "sentiment",
@@ -23,4 +24,3 @@
     "openai": "^4.86.1"
   }
 }
-
