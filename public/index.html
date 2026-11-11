@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Planet Sentiment - AI 감성 텍스트 분석</title>
+  <!-- 세련된 현대적 타이포그래피를 위한 Pretendard 웹 폰트 적용 -->
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <!-- 메인 스타일시트 연결 -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- 1. 상단 포인트 장식: 완만하고 부드러운 스카이블루 그라데이션 곡선 바 (Planet 레퍼런스 핵심 요소) -->
+  <div class="top-gradient-bar"></div>
+
+  <!-- 2. 상단 네비게이션 헤더 -->
+  <header class="header">
+    <div class="header-container">
+      <!-- 브랜드 로고 -->
+      <a href="/" class="logo">
+        <span class="logo-symbol">●</span>
+        <span class="logo-text">Planet</span>
+      </a>
+
+      <!-- 중앙 네비게이션 메뉴 링크 -->
+      <nav class="nav-menu">
+        <a href="#analyzer" class="nav-link active">감성 분석기</a>
+        <a href="#about" class="nav-link">서비스 소개</a>
+        <a href="#tech" class="nav-link">기술 스택</a>
+      </nav>
+
+      <!-- 우측 상단 블랙 알약 형태 버튼 -->
+      <div class="header-action">
+        <a href="#analyzer" class="pill-button">지금 분석하기</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- 3. 메인 콘텐츠 영역 -->
+  <main class="main-content">
+    
+    <!-- Hero 섹션: 대담한 타이포그래피 & 소개 카피 -->
+    <section class="hero-section">
+      <div class="hero-header-wrap">
+        <span class="sub-badge">AI Powered Emotion Radar</span>
+        <h1 class="hero-copy">문장 속에 숨은 마음의 결을<br><span class="highlight">가장 정확하게</span> 읽어냅니다.</h1>
+        <p class="hero-desc">
+          일상의 일기부터 마케팅 카피, 고객 리뷰까지.<br>
+          고민 없이 입력하시면 OpenAI gpt-4o-mini가 문장의 뉘앙스와 감정의 농도를 명확한 데이터로 해석해 드립니다.
+        </p>
+      </div>
+
+      <!-- 거대한 볼드 타이포그래피 (Planet 스타일 시그니처) -->
+      <div class="giant-watermark" aria-hidden="true">
+        SENTIMENT
+      </div>
+    </section>
+
+    <!-- 인터랙티브 분석 섹션: 입력 폼 & 결과 출력 영역 -->
+    <section id="analyzer" class="analyzer-section">
+      <div class="analyzer-grid">
+        
+        <!-- 좌측 / 상단: 텍스트 입력 카드 -->
+        <div class="card input-card">
+          <div class="card-header">
+            <h2 class="card-title">텍스트 입력</h2>
+            <span class="char-counter" id="charCounter">0 / 1000자</span>
+          </div>
+
+          <form id="sentimentForm" class="analyzer-form">
+            <div class="textarea-wrapper">
+              <textarea 
+                id="inputText" 
+                name="text" 
+                rows="6" 
+                placeholder="분석하고 싶은 문장이나 글을 입력하세요 (최소 5자 이상)...&#10;예: 오늘 프로젝트 발표를 무사히 마쳤다. 팀원들과 고생한 보람이 느껴져서 정말 뿌듯하다!"
+                required
+              ></textarea>
+            </div>
+
+            <div class="form-footer">
+              <div class="helper-text" id="helperText">최소 5자 이상 입력해주세요.</div>
+              <button type="submit" id="submitBtn" class="analyze-btn" disabled>
+                <span class="btn-text">감성 분석하기</span>
+                <span class="spinner" id="btnSpinner" aria-hidden="true"></span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- 우측 / 하단: 분석 결과 표시 카드 -->
+        <div class="card result-card" id="resultCard">
+          <div class="card-header">
+            <h2 class="card-title">분석 결과</h2>
+            <!-- 상태 뱃지 (대기중 / 완료) -->
+            <span class="status-indicator" id="statusIndicator">분석 대기 중</span>
+          </div>
+
+          <!-- 기본 대기 상태 안내 뷰 -->
+          <div class="result-placeholder" id="resultPlaceholder">
+            <div class="placeholder-icon">✦</div>
+            <p class="placeholder-text">왼쪽 입력창에 문장을 적고 <strong>[감성 분석하기]</strong>를 클릭하면<br>이곳에 정밀한 감성 리포트가 표시됩니다.</p>
+          </div>
+
+          <!-- 실제 결과 렌더링 뷰 (초기에는 숨김 처리) -->
+          <div class="result-body hidden" id="resultBody">
+            
+            <!-- 1. 감성 판별 뱃지 및 점수 -->
+            <div class="sentiment-badge-row">
+              <div class="badge-group">
+                <span class="label-caption">판별 감성</span>
+                <div class="sentiment-pill" id="sentimentPill">긍정</div>
+              </div>
+
+              <div class="confidence-group">
+                <span class="label-caption">신뢰도</span>
+                <div class="confidence-score" id="confidenceScore">0%</div>
+              </div>
+            </div>
+
+            <!-- 2. 신뢰도 게이지 프로그레스 바 -->
+            <div class="progress-container">
+              <div class="progress-bar-bg">
+                <div class="progress-bar-fill" id="progressBarFill" style="width: 0%;"></div>
+              </div>
+            </div>
+
+            <!-- 3. AI 상세 분석 근거 (이유) 텍스트 상자 -->
+            <div class="reasoning-box">
+              <span class="reason-title">AI 심층 분석 이유</span>
+              <p class="reason-content" id="reasonContent">
+                분석 이유가 여기에 표시됩니다.
+              </p>
+            </div>
+
+            <!-- 4. 결과 저장 안내 -->
+            <div class="db-saved-notice">
+              <span class="check-icon">✓</span>
+              <span>Supabase 데이터베이스에 분석 이력이 안전하게 보관되었습니다.</span>
+            </div>
+
+          </div>
+
+          <!-- 오류 알림 박스 (네트워크 에러, 글자 수 에러 등) -->
+          <div class="error-toast hidden" id="errorToast">
+            <span class="error-icon">!</span>
+            <span class="error-message" id="errorMessage">오류가 발생했습니다.</span>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 서비스 특징 소개 섹션 -->
+    <section id="about" class="info-section">
+      <div class="info-card">
+        <h3 class="info-title">정밀한 맥락 파악</h3>
+        <p class="info-desc">단어 단위의 기계적 매칭이 아닌, 문장의 앞뒤 호응과 숨은 뉘앙스까지 고려하여 정확하게 분석합니다.</p>
+      </div>
+      <div class="info-card">
+        <h3 class="info-title">객관적 신뢰도 지표</h3>
+        <p class="info-desc">0%에서 100%까지의 신뢰도 수치를 산출하여 결과의 확실성을 직관적으로 확인할 수 있습니다.</p>
+      </div>
+      <div class="info-card">
+        <h3 class="info-title">지속적인 데이터 누적</h3>
+        <p class="info-desc">Supabase 클라우드 데이터베이스를 통해 모든 분석 로그를 실시간으로 기록하고 보존합니다.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- 4. 푸터 -->
+  <footer class="footer">
+    <div class="footer-container">
+      <div class="footer-logo">
+        <span class="logo-symbol">●</span>
+        <span>Planet Sentiment</span>
+      </div>
+      <p class="footer-copy">© 2026 Planet Sentiment Project. Built with OpenAI & Supabase.</p>
+    </div>
+  </footer>
+
+  <!-- 프론트엔드 비즈니스 로직 스크립트 연결 -->
+  <script src="app.js"></script>
+</body>
+</html>
+
