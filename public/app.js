@@ -180,19 +180,27 @@ document.addEventListener('DOMContentLoaded', () => {
         body: JSON.stringify({ text })
       });
 
-      const result = await response.json();
+      // 응답 데이터 파싱
+      let result;
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        result = await response.json();
+      } else {
+        const textError = await response.text();
+        result = { success: false, error: `서버 응답 오류 (상태코드: ${response.status})` };
+      }
 
       if (response.ok && result.success) {
         // 성공 시 결과 렌더링
         renderResult(result.data);
       } else {
         // 백엔드에서 반환한 친절한 오류 메시지 표출
-        showError(result.error || '감성 분석에 실패했습니다. 다시 시도해주세요.');
+        showError(result.error || `감성 분석에 실패했습니다. (상태코드: ${response.status})`);
       }
 
     } catch (networkError) {
       console.error('[네트워크 통신 에러]:', networkError);
-      showError('서버와의 통신이 원활하지 않습니다. 로컬 서버가 실행 중인지 확인해주세요.');
+      showError('서버와의 통신이 원활하지 않습니다. 네트워크 상태나 Vercel 로그를 확인해주세요.');
     } finally {
       // 로딩 상태 종료
       setLoadingState(false);
@@ -202,4 +210,3 @@ document.addEventListener('DOMContentLoaded', () => {
   // 초기 상태 평가 실행
   validateInput();
 });
-

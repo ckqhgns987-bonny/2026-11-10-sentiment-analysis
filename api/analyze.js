@@ -17,24 +17,6 @@ require('dotenv').config();
 const OpenAI = require('openai');
 const { createClient } = require('@supabase/supabase-js');
 
-// 1. OpenAI 클라이언트 초기화
-// .env 파일의 OPENAI_API_KEY 환경변수를 사용합니다.
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
-
-// 2. Supabase 클라이언트 초기화
-// 환경변수가 등록되어 있을 때만 클라이언트를 생성하여 안전하게 방어합니다.
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-
-let supabase = null;
-if (supabaseUrl && supabaseAnonKey && !supabaseUrl.includes('your_supabase_url_here')) {
-  supabase = createClient(supabaseUrl, supabaseAnonKey);
-} else {
-  console.warn('[주의] Supabase 환경 변수가 설정되지 않았거나 기본 템플릿 상태입니다. DB 저장이 비활성화될 수 있습니다.');
-}
-
 /**
  * 감성 분석 처리 메인 핸들러 함수
  * Express 라우터 및 Vercel Serverless Function에서 req, res를 받아 처리합니다.
@@ -43,13 +25,13 @@ if (supabaseUrl && supabaseAnonKey && !supabaseUrl.includes('your_supabase_url_h
  * @param {import('express').Response} res - 클라이언트 응답 객체
  */
 async function analyzeHandler(req, res) {
-  // CORS 헤더 설정 (필요 시 외부 도메인 호출 허용)
+  // CORS 헤더 설정 (브라우저 간 통신 허용)
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
-  // Preflight(OPTIONS) 요청 처리
+  // Preflight(OPTIONS) 요청 즉시 승인 처리
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -63,14 +45,19 @@ async function analyzeHandler(req, res) {
   }
 
   try {
-    // 1. 클라이언트 요청 본문(body) 추출
-    // Express 및 Serverless 환경에서 본문 파싱 처리
-    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    // 1. 클라이언트 요청 본문(body) 안전 추출
+    let body = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch (e) {
+        body = {};
+      }
+    }
     const rawText = body && body.text ? body.text : '';
     const text = String(rawText).trim();
 
-    // 2. 입력값 유효성 검사 (Validation)
-    // 명세서 기준: 최소 5자 이상, 최대 1000자 이하
+    // 2. 입력값 유효성 검사 (Validation: 5자 이상, 1000자 이하)
     if (!text || text.length < 5) {
       return res.status(400).json({
         success: false,
@@ -86,14 +73,19 @@ async function analyzeHandler(req, res) {
     }
 
     // 3. OpenAI API 키 존재 여부 검증
-    if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY.includes('your_openai_api_key_here')) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey || apiKey.includes('your_openai_api_key_here')) {
+      console.error('[에러] OPENAI_API_KEY 환경변수가 설정되지 않았습니다.');
       return res.status(500).json({
         success: false,
-        error: '서버에 OpenAI API 키가 설정되지 않았습니다. .env 파일을 확인해주세요.'
+        error: '서버에 OpenAI API 키가 설정되지 않았습니다. Vercel 환경 변수(OPENAI_API_KEY)를 확인해주세요.'
       });
     }
 
-    // 4. OpenAI API 호출 (gpt-4o-mini 모델 및 JSON 모드 적용)
+    // OpenAI 클라이언트 생성 (요청 시점에 안전하게 초기화)
+    const openai = new OpenAI({ apiKey });
+
+    // 4. OpenAI API 호출 (gpt-4o-mini 모델 및 JSON 객체 반환 모드)
     const promptSystem = `당신은 한국어 감성 분석 전문가입니다. 사용자의 입력 텍스트를 분석하여 sentiment ('긍정', '부정', '중립' 중 하나), confidence (0에서 100 사이의 정수), reason (분석 이유 한국어 2~3문장)만을 담은 JSON 객체로 반환하십시오.
 반드시 아래 JSON 포맷을 준수해야 합니다:
 {
@@ -109,10 +101,10 @@ async function analyzeHandler(req, res) {
         { role: 'user', content: text }
       ],
       response_format: { type: 'json_object' },
-      temperature: 0.3 // 일관되고 정밀한 분석을 위해 낮은 온도값 설정
+      temperature: 0.3
     });
 
-    // 5. OpenAI 응답 데이터 파싱 및 안전 검증
+    // 5. OpenAI 응답 데이터 파싱 및 안전 정규화
     const responseContent = completion.choices[0].message.content;
     let parsedResult;
 
@@ -126,7 +118,7 @@ async function analyzeHandler(req, res) {
       });
     }
 
-    // 감성 값 정규화 및 방어 코드 (반드시 '긍정', '부정', '중립' 중 하나여야 함)
+    // 감성 값 정규화 ('긍정', '부정', '중립' 방어)
     let sentiment = parsedResult.sentiment ? String(parsedResult.sentiment).trim() : '중립';
     if (!['긍정', '부정', '중립'].includes(sentiment)) {
       if (sentiment.includes('긍정') || sentiment.toLowerCase().includes('positive')) sentiment = '긍정';
@@ -148,9 +140,13 @@ async function analyzeHandler(req, res) {
     };
 
     // 6. Supabase 데이터베이스 저장 (비동기 수행)
-    // 요구사항: DB 저장에 실패하더라도 사용자 분석 결과 반환이 중단되지 않도록 안전하게 분리 처리
-    if (supabase) {
+    // DB 저장이 실패하더라도 사용자 분석 결과는 정상 반환되도록 분리
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+
+    if (supabaseUrl && supabaseAnonKey && !supabaseUrl.includes('your_supabase_url_here')) {
       try {
+        const supabase = createClient(supabaseUrl, supabaseAnonKey);
         const { error: dbError } = await supabase
           .from('sentiment_logs')
           .insert([
@@ -163,23 +159,32 @@ async function analyzeHandler(req, res) {
           ]);
 
         if (dbError) {
-          console.error('[Supabase DB 저장 경고]:', dbError.message);
+          console.warn('[Supabase DB 저장 경고]:', dbError.message);
         } else {
-          console.log('[Supabase DB 저장 완료] ID 저장 성공');
+          console.log('[Supabase DB 저장 완료] 성공');
         }
       } catch (dbException) {
-        console.error('[Supabase DB 예외 발생]:', dbException.message);
+        console.warn('[Supabase DB 예외 발생]:', dbException.message);
       }
     }
 
-    // 7. 성공 결과 반환 (명세서 200 OK 형식 준수)
+    // 7. 성공 결과 반환 (200 OK)
     return res.status(200).json({
       success: true,
       data: analysisData
     });
 
   } catch (err) {
-    console.error('[서버 내부 에러]:', err);
+    console.error('[서버 내부 에러 발생]:', err);
+    
+    // 만약 OpenAI API 할당량(크레딧) 부족 에러인 경우
+    if (err && err.status === 429) {
+      return res.status(500).json({
+        success: false,
+        error: 'OpenAI API 사용량 한도(크레딧)를 초과했습니다. OpenAI 계정의 크레딧 잔액을 확인해주세요.'
+      });
+    }
+
     return res.status(500).json({
       success: false,
       error: '감성 분석 처리 중 서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
@@ -187,6 +192,5 @@ async function analyzeHandler(req, res) {
   }
 }
 
-// 모듈로 내보내어 Vercel 및 Express 양쪽에서 사용할 수 있도록 구성
+// 모듈 내보내기 (Vercel Serverless Function 및 Express 공용)
 module.exports = analyzeHandler;
-
